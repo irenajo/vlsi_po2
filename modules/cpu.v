@@ -74,6 +74,19 @@ reg [2:0] addr_op1_reg, addr_op1_next, addr_op2_reg, addr_op2_next, addr_op3_reg
 reg [3:0] oc;
 
 
+// op codes
+localparam code_mov = 4'b0000;
+localparam code_add = 4'b0001;
+localparam code_sub = 4'b0010;
+localparam code_mul = 4'b0011;
+localparam code_div = 4'b0100;
+localparam code_in = 4'b0111;
+localparam code_out = 4'b1000;
+localparam code_stop = 4'b1111;
+localparam code_ir2_example = 4'b1010; // does not exist, used for testing 2-instruction length :)
+
+
+
 // FINITE STATE MACHINE 
 reg [6:0] state_reg, state_next; // ???
 
@@ -83,14 +96,22 @@ reg [6:0] state_reg, state_next; // ???
 // state IR
 // todo : enumerate
 
-// reset, end
+// reset, end, error
 localparam RESET = 0;
+localparam ERROR; // todo
 
 // fetch IR
-localparam IR1_FETCH_START;
-localparam IR1_FETCH_WAIT;
-localparam IR1_FETCH_READ;
-localparam IR1_FETCH_END;
+localparam IR1_FETCH1_START;
+localparam IR1_FETCH2_WAIT;
+localparam IR1_FETCH3_loadIR;
+localparam IR1_FETCH4_parse;
+
+localparam IR2_FETCH1_START;
+localparam IR2_FETCH2_WAIT;
+localparam IR2_FETCH3_loadIR;
+localparam IR2_FETCH4_parse;
+
+// decode ?
 
 localparam IR1_SET = 6'd2;
 localparam IR2_READ = 6'd3;
@@ -110,19 +131,20 @@ reg di1, di2, di3;
 reg [DATA_WIDTH:0] ir2;
 
 // IR
+// todo: we probably dont need these.
 wire i_d1, i_d2, i_d3;
 wire [2:0] addr1, addr2, addr3;
 wire [3:0] oc;
 
 // wire [2:0] addr_op1_reg, addr_op1_next, addr_op2_reg, addr_op2_next, addr_op3_reg, addr_op3_next;
 
-assign oc = ir_out[31:28];
-assign addr1 = ir_out[26:24];
-assign addr2 = ir_out[22:20];
-assign addr3 = ir_out[18:16];
-assign i_d1 = ir_out[27];
-assign i_d2 = ir_out[23];
-assign i_d3 = ir_out[19];
+// assign oc = ir_out[31:28];
+// assign addr1 = ir_out[26:24];
+// assign addr2 = ir_out[22:20];
+// assign addr3 = ir_out[18:16];
+// assign i_d1 = ir_out[27];
+// assign i_d2 = ir_out[23];
+// assign i_d3 = ir_out[19];
 
 /// on clock we update state and output of component
 always @(posedge clk, negedge rst_n) begin
@@ -162,46 +184,72 @@ always @(*) begin
             pc_in = 6'd8;
             sp_ld = 1'b1;
             sp_in = {6{1'b1}};
-            state_next = IR1_FETCH_START;
+            state_next = IR1_FETCH1_START;
         end
 
-        IR1_FETCH_START: begin
+        IR1_FETCH1_START, IR2_FETCH1_START: begin
             // put in MAR
             mar_ld = 1'b1;
             mar_in = pc;
 
             // change state
-            state_next = IR1_FETCH_WAIT;
+            case (state_reg)
+                IR1_FETCH1_START : state_next =  IR1_FETCH2_WAIT;
+                IR2_FETCH1_START : state_next =  IR2_FETCH2_WAIT;
+                default: state_next = ERROR;
+            endcase
         end
 
-        IR1_FETCH_WAIT: begin
+        IR1_FETCH2_WAIT, IR2_FETCH2_WAIT: begin
             // increment PC
             pc_inc = 1'b1;
 
             // load (from memory)
             mdr_in = 1'b1;
             
-            state_next = IR1_FETCH_READ;
+            // change state
+            case (state_reg)
+                IR1_FETCH2_WAIT : state_next =  IR1_FETCH3_loadIR;
+                IR2_FETCH2_WAIT : state_next =  IR2_FETCH3_loadIR;
+                default: state_next = ERROR;
+            endcase
         end
         
-        IR1_FETCH_READ: begin
+        IR1_FETCH3_loadIR, IR2_FETCH3_loadIR: begin
             // read from mdr into ir
             ir_ld = mdr_out;
             ir_in = 1'b1;
-
-            state_next = IR1_FETCH_END;
+            // change state
+            case (state_reg)
+                IR1_FETCH3_loadIR : state_next =  IR1_FETCH4_parse;
+                IR2_FETCH3_loadIR : state_next =  IR2_FETCH4_parse;
+                default: state_next = ERROR;
+            endcase
         end
 
-        IR1_FETCH_END: begin
-            // store from IR into internal register because we might need to read IR2...?
+        IR1_FETCH4_parse: begin
+            // put data in internal cpu registers
+            {oc, di1, addr1, di2, addr2, di3, addr3} = ir_out;
+
+            // based on OC, decide to either FETCH IR2, or DECODE.
+            case (oc)
+                code_ir2_example: state_next = IR2_FETCH1_START;
+                default: state_next = DECODE_1;
+            endcase
+        end
+
+        IR2_FETCH4_parse: begin
+            // put data in internal ir2 register
+            ir2 = ir1_out;
+
+            // go on DECODE phase (since max length of instruction is 2 words)
             state_next = DECODE_1;
         end
 
         DECODE_1: begin
-            // put data in internal cpu registers
-            
 
             // decide whether we need to read another instruction or not.
+            if(oc)
 
 
         end
@@ -213,65 +261,59 @@ end
 
 
 
-always @(posedge clk, negedge rst_n) begin
-    if(!rst_n) begin
-        // todo
-    end
-    else begin
-        // setovanje vrednosti dobijenih sa OUT ?????
+// always @(posedge clk, negedge rst_n) begin
+//     if(!rst_n) begin
+//         // todo
+//     end
+//     else begin
+//         // setovanje vrednosti dobijenih sa OUT ?????
 
-        // obrada STATE-a u kojem smo
-        case (state_reg)
-            IR1_FETCH_START: begin
-                // dohvati IR1 iz memorije
-                    addr = pc;
-                    we = 1'b0;
-                    pc = pc + 1'b1;
-            end
-            IR1_SET: begin
-                    // sacekaj da prodje takt -> u mem je memorijska rec
-                    {oc, di1, addr1, di2, addr2, di3, addr3} = mem;
+//         // obrada STATE-a u kojem smo
+//         case (state_reg)
+//             IR1_FETCH1_START: begin
+//                 // dohvati IR1 iz memorije
+//                     addr = pc;
+//                     we = 1'b0;
+//                     pc = pc + 1'b1;
+//             end
+//             IR1_SET: begin
+//                     // sacekaj da prodje takt -> u mem je memorijska rec
+//                     {oc, di1, addr1, di2, addr2, di3, addr3} = mem;
 
-                    // da li nam treba druga rec?
-                    if(OC == nesto) // todo - ovo napraviti da RADI
-                        state_reg = IR2_READ;
-                    else
-                        state_reg = OC; // ???
-                    pc = pc + 1'b1;
-            end
-            IR2_READ: begin
-                // dohvati IR2 iz memorije
-                    addr = pc;
-                    we = 1'b0;
-                    pc = pc + 1'b1;
-            end
-            IR2_SET: begin
-                    // sacekaj da prodje takt -> u mem je memorijska rec
-                    ir2 = mem;
-                    pc = pc + 1'b1;
-            end
+//                     // da li nam treba druga rec?
+//                     if(OC == nesto) // todo - ovo napraviti da RADI
+//                         state_reg = IR2_READ;
+//                     else
+//                         state_reg = OC; // ???
+//                     pc = pc + 1'b1;
+//             end
+//             IR2_READ: begin
+//                 // dohvati IR2 iz memorije
+//                     addr = pc;
+//                     we = 1'b0;
+//                     pc = pc + 1'b1;
+//             end
+//             IR2_SET: begin
+//                     // sacekaj da prodje takt -> u mem je memorijska rec
+//                     ir2 = mem;
+//                     pc = pc + 1'b1;
+//             end
 
-            // CPU INSTRUCTIONS
-            INS_MOV: begin
+//             // CPU INSTRUCTIONS
+//             INS_MOV: begin
                 
 
-            end
-            INS_ADD: begin
+//             end
+//             INS_ADD: begin
 
-            end
+//             end
 
-            default: 
-        endcase
+//             default: 
+//         endcase
 
-    end
+//     end
     
-end
-
-
-
-
-
-
+// end
 
 endmodule
 

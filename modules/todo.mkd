@@ -1,0 +1,29 @@
+TODO:
+
+[] map out reading instruction in diagram
+
+[] implement states for reading instruction :)
+
+
+
+MAR + MDR LOGIC:
+- To read, the CPU places an address in the MAR and activates a read signal; the memory returns data to the MDR. 
+
+- To write, the CPU places the address in the MAR and data in the MDR, then activates a write signal. 
+
+
+IR, internal cpu registers logic:
+- it doesnt make sense to use wires to internally store from IR because IR will change if we read the second instruction.
+therefore the wires can be removed, and we can use internal registers instead.
+[]? when to clear the registers? => when fetching the new instruction.
+[]? should we be re-setting values at the beginning of combinatory logic? => no, because we dont always assign it a value. 
+
+
+OC, logic with op codes:
+- we must store op codes somewhere.
+[]? should their value be equal to state? => no, because they might use multiple clock cycles to complete, and the nubmers are next to each other.
+[]? how to store the opcodes then? => as localparam values, 4 bits long (thats how it is in the project specification)
+
+
+DECODE, the logic:
+
