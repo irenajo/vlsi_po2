@@ -82,14 +82,24 @@ reg [6:0] state_reg, state_next; // ???
 
 // state IR
 // todo : enumerate
-localparam RESET;
-localparam IR1_FETCH;
+
+// reset, end
+localparam RESET = 0;
+
+// fetch IR
+localparam IR1_FETCH_START;
 localparam IR1_FETCH_WAIT;
+localparam IR1_FETCH_READ;
+localparam IR1_FETCH_END;
+
 localparam IR1_SET = 6'd2;
 localparam IR2_READ = 6'd3;
 localparam IR2_SET = 6'd4;
 
-// state OP
+// decode OP
+localparam DECODE_1
+
+// execute OP
 localparam INS_MOV;
 localparam INS_ADD;
 
@@ -114,7 +124,7 @@ assign i_d1 = ir_out[27];
 assign i_d2 = ir_out[23];
 assign i_d3 = ir_out[19];
 
-
+/// on clock we update state and output of component
 always @(posedge clk, negedge rst_n) begin
     if(!rst_n) begin
         out_reg <= {DATA_WIDTH{1'b0}};
@@ -132,16 +142,18 @@ always @(posedge clk, negedge rst_n) begin
     end
 end
 
+/// on any change we do actions based on the current state we are in
+// todo : (does change of state on clock count too?)
 always @(*) begin
 
     // set previous values
     out_next = out_reg;
     state_next = state_reg;
-    addr_op1_next = addr_op1_reg;
-    addr_op2_next = addr_op2_reg;
-    addr_op3_next = addr_op3_reg;
+    // addr_op1_next = addr_op1_reg;
+    // addr_op2_next = addr_op2_reg;
+    // addr_op3_next = addr_op3_reg;
 
-    // todo: MAYBE reset values of each input of all registers (IR, MAR, MDR, etc...)
+    // todo: reset values of each input of all registers (IR, MAR, MDR, etc...)
 
     // do current state
     case (state_reg)
@@ -150,23 +162,48 @@ always @(*) begin
             pc_in = 6'd8;
             sp_ld = 1'b1;
             sp_in = {6{1'b1}};
-            state_next = IR1_FETCH;
+            state_next = IR1_FETCH_START;
         end
 
-        IR1_FETCH: begin
+        IR1_FETCH_START: begin
             // put in MAR
             mar_ld = 1'b1;
             mar_in = pc;
-
-            // increment PC
-            pc_inc = 1'b1;
 
             // change state
             state_next = IR1_FETCH_WAIT;
         end
 
         IR1_FETCH_WAIT: begin
-            state_next = ?????? 
+            // increment PC
+            pc_inc = 1'b1;
+
+            // load (from memory)
+            mdr_in = 1'b1;
+            
+            state_next = IR1_FETCH_READ;
+        end
+        
+        IR1_FETCH_READ: begin
+            // read from mdr into ir
+            ir_ld = mdr_out;
+            ir_in = 1'b1;
+
+            state_next = IR1_FETCH_END;
+        end
+
+        IR1_FETCH_END: begin
+            // store from IR into internal register because we might need to read IR2...?
+            state_next = DECODE_1;
+        end
+
+        DECODE_1: begin
+            // put data in internal cpu registers
+            
+
+            // decide whether we need to read another instruction or not.
+
+
         end
 
         default: 
@@ -185,7 +222,7 @@ always @(posedge clk, negedge rst_n) begin
 
         // obrada STATE-a u kojem smo
         case (state_reg)
-            IR1_FETCH: begin
+            IR1_FETCH_START: begin
                 // dohvati IR1 iz memorije
                     addr = pc;
                     we = 1'b0;
