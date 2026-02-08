@@ -1,5 +1,8 @@
 TODO:
 
+[] add resetting all values to 0 in combinatory logic block
+[] should localparam[5:0] have width?
+
 [] map out reading instruction in diagram
 
 [] implement states for reading instruction :)
@@ -26,4 +29,32 @@ OC, logic with op codes:
 
 
 DECODE, the logic:
+
+having a DECODE pros:
+- one place for all params, before EXEC
+- separation of concerns
+
+having a DECODE cons:
+- have to chase random ass registers (Where do i put these in??)
+
+===
+not having a DECODE pros:
+- not chase random ass registers
+
+not having a DECODE cons:
+- possibly have extra states...
+- ??? how do i pull it off?
+
+
+* are there cases where we dont have decode?
+
+
+[]? where do i store the output of mem_ind1, mem_ind2, mem_ind3 ?
+[]? where do i store addr1/addr2/addr3 after i read from them?
+
+
+if mem_indir =>
+    - put addr from IR into MAR, then read from mem into MDR
+    - then from MDR immediately put the result into MAR again, and read from memory again, put into MDR
+    - then from MDR read and put SOMEWHERE (IR? A? idk)
 
