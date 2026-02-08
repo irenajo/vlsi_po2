@@ -111,14 +111,15 @@ localparam IR2_FETCH2_WAIT;
 localparam IR2_FETCH3_loadIR;
 localparam IR2_FETCH4_parse;
 
-// decode ?
+// decode 
+localparam ADDR1_DECODE1;
+localparam ADDR1_DECODE2;
+localparam ADDR1_DECODE3;
+
 
 localparam IR1_SET = 6'd2;
 localparam IR2_READ = 6'd3;
 localparam IR2_SET = 6'd4;
-
-// decode OP
-localparam DECODE_1
 
 // execute OP
 localparam INS_MOV;
@@ -205,7 +206,7 @@ always @(*) begin
             pc_inc = 1'b1;
 
             // load (from memory)
-            mdr_in = 1'b1;
+            mdr_ld = 1'b1;
             
             // change state
             case (state_reg)
@@ -217,8 +218,8 @@ always @(*) begin
         
         IR1_FETCH3_loadIR, IR2_FETCH3_loadIR: begin
             // read from mdr into ir
-            ir_ld = mdr_out;
-            ir_in = 1'b1;
+            ir_ld = 1'b1;
+            ir_in = mdr_out;
             // change state
             case (state_reg)
                 IR1_FETCH3_loadIR : state_next =  IR1_FETCH4_parse;
@@ -234,22 +235,20 @@ always @(*) begin
             // based on OC, decide to either FETCH IR2, or DECODE.
             case (oc)
                 code_ir2_example: state_next = IR2_FETCH1_START;
-                default: state_next = DECODE_1;
+                default: state_next = ADDR1_DECODE1;
             endcase
         end
 
         IR2_FETCH4_parse: begin
             // put data in internal ir2 register
-            ir2 = ir1_out;
+            ir2 = ir_out;
 
             // go on DECODE phase (since max length of instruction is 2 words)
-            state_next = DECODE_1;
+            state_next = ADDR1_DECODE1;
         end
 
-        DECODE_1: begin
-
-            // decide whether we need to read another instruction or not.
-            if(oc)
+        ADDR1_DECODE1: begin
+            // read from mem 
 
 
         end
