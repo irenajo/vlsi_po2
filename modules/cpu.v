@@ -17,7 +17,7 @@ output[ADDR_HIGH:0] addr, pc, sp;
 
 // internal CPU params
 reg [3:0] oc;
-reg [2:0] addr1, addr2, addr3;
+reg [2:0] addr_x, addr_y, addr_z;
 reg di_x, di_y, di_z;
 reg [DATA_WIDTH:0] ir2;
 
@@ -96,6 +96,9 @@ assign sp = sp_out;
 assign addr = mar_out;
 assign data = mdr_out;
 
+// constants abt addressing
+localparam INDIRECT_ADDRESSING = 1'b1;
+
 // op codes
 localparam code_mov = 4'b0000;
 localparam code_add = 4'b0001;
@@ -105,9 +108,6 @@ localparam code_div = 4'b0100;
 localparam code_in = 4'b0111;
 localparam code_out = 4'b1000;
 localparam code_stop = 4'b1111;
-localparam code_ir2_example = 4'b1010; // does not exist, used for testing 2-instruction length :)
-
-
 
 // FINITE STATE MACHINE 
 reg [6:0] state_reg, state_next;
@@ -132,13 +132,13 @@ localparam IR2_FETCH4_parse;
 // decode 
 localparam DECODE_START; // figure out operation in this stage
 
-localparam DECODE_X_MAR_IN;   // todo - this is same logic.. we can maybe reuse these states, just that the stores are different.
+localparam DECODE_X_MAR_IN;
 localparam DECODE_X_MEM_READ;
 localparam DECODE_X_MDR_IN;
-localparam DECODE_X_INDIRECT_MAR_IN; // ???
-localparam DECORE_X_INDIRECT_MEM_READ;
-localparam DECORE_X_INDIRECT_MDR_IN;
-localparam DECODE_X_PUT_IN_X; // ?
+localparam DECODE_X_INDIRECT_MAR_IN;
+localparam DECODE_X_INDIRECT_MEM_READ;
+localparam DECODE_X_INDIRECT_MDR_IN;
+localparam DECODE_X_PUT_IN_X;
 
 localparam DECODE_Y_MAR_IN;
 localparam DECODE_Y_MEM_READ;
@@ -157,9 +157,9 @@ localparam DECORE_Z_INDIRECT_MDR_IN;
 localparam DECODE_Z_PUT_IN_A;
 
 // execute OP
-localparam EXECUTE_1;
-localparam EXECUTE_2;
-localparam EXECUTE_3;
+localparam EXECUTE_STATE_1;
+localparam EXECUTE_STATE_2;
+localparam EXECUTE_STATE_3;
 
 /// on clock we update state and output of component
 always @(posedge clk, negedge rst_n) begin
@@ -222,7 +222,7 @@ always @(*) begin
             pc_inc = 1'b1;
 
             // todo what
-            we_reg_next = 1'b0;
+            // we_reg_next = 1'b0;
             
             // change state
             case (state_reg)
@@ -263,12 +263,12 @@ always @(*) begin
 
         IR1_FETCH4_parse: begin
             // put data in internal cpu registers
-            {oc, di_x, addr1, di_y, addr2, di_z, addr3} = ir_out[15:0];
+            {oc, di_x, addr_x, di_y, addr_y, di_z, addr_z} = ir_out[15:0];
 
             // based on OC, decide to either FETCH IR2, or DECODE.
             // however it doesnt seem that any of our instructions have 2 words length IR.
             case (oc)
-                code_ir2_example: state_next = IR2_FETCH1_START; // this will do nothing!
+                // code_ir2_example: state_next = IR2_FETCH1_START; // todo - add ops here that have 2 words in instr
                 default: state_next = DECODE_START;
             endcase
         end
@@ -277,7 +277,7 @@ always @(*) begin
             // put data in internal ir2 register
             ir_ld = 1'b1;
             ir_in[31:16] = mdr_out;
-            ir2 = ir_out;
+            // ir2 = ir_out; // todo ??
 
             // go on DECODE phase (since max length of instruction is 2 words)
             state_next = DECODE_START;
@@ -290,13 +290,13 @@ always @(*) begin
                 code_add,
                 code_sub,
                 code_mul: begin
-                        if(di_x == 1'b1) 
+                        if(di_x == INDIRECT_ADDRESSING) 
                             state_next = DECODE_X_INDIRECT_MAR_IN;
                         else 
                             state_next = DECODE_Y_MAR_IN;
                     end
                 code_in: begin
-                        if(di_x == 1'b1) 
+                        if(di_x == INDIRECT_ADDRESSING) 
                             state_next = DECODE_X_INDIRECT_MAR_IN;
                         else
                             state_next = EXECUTE_STATE_1;
@@ -305,111 +305,205 @@ always @(*) begin
                         state_next = DECODE_X_MAR_IN;
                     end
                 code_div: begin
+                    // ERROR
                     state_next = RESET;
                 end
                 code_stop: begin
                         state_next = DECODE_X_MAR_IN;
-                    end
-                default: 
-            endcase
+                end
+            endcase;
         end
 
         DECODE_X_MAR_IN: begin
-            // put addr of first operand (addr1) in mar
+            // put addr of first operand (addr_x) in mar
             mar_ld = 1'b1;
-            mar_in = addr1;
+            mar_in = {{{3{1'b0}}, addr_x};
 
             state_next = DECODE_X_MEM_READ;
         end
 
         DECODE_X_MEM_READ: begin
-            // read from memory into MDR
-            mdr_ld = 1'b1;
-
-            // ?
-            we_reg_next = 1'b0;
+            // we_reg_next = 1'b0; // todo ?
 
             state_next = DECODE_X_MDR_IN;
         end
 
         DECODE_X_MDR_IN: begin
-            // read from MDR into internal register
-            // todo !!!!
+            mdr_ld = 1'b1;
 
-            if(di_x == INDIRECT_READ)
-                state_next = ADDR1_DECODE4_indirect_indirect;
+            if(di_x == INDIRECT_ADDRESSING)
+                state_next = DECODE_X_INDIRECT_MAR_IN;
             else
-                state_next = ADDR1_DECODE5_checkOp;
+                state_next = DECODE_X_PUT_IN_X;
         end
 
+        DECODE_X_INDIRECT_MAR_IN: begin
+            case (oc)
+                code_mov,
+                code_add,
+                code_sub,
+                code_mul,
+                code_in: begin
+                    mar_in = {{3{1'b0}}, addr_x};
+                end
+                default: begin
+                    mar_in = mdr_out[ADDR_WIDTH-1:0]; // todo, potential mismatch of lengths? how wide is mdr_out, and what will this do to it?
+                end
+            endcase;
+            mar_ld = 1'b1;
+
+            state_next = DECODE_X_INDIRECT_MEM_READ;
+        end
+
+        DECODE_X_INDIRECT_MEM_READ: begin
+            // we = 1'b0;
+            
+            state_next = DECODE_X_INDIRECT_MDR_IN;
+        end
         
+        DECODE_X_INDIRECT_MDR_IN: begin
+            // mdr_in = mem; // no need for this because i reset mdr_in = mem at beginning of combinatory block!
+            mdr_ld = 1'b1;
+            
+            state_next = DECODE_X_PUT_IN_X;
+        end
+
+        DECODE_X_PUT_IN_X: begin
+            ind_x_ld = 1'b1;
+            ind_x_in = mdr_out;
+
+            case (oc)
+                MOV_OP_CODE,
+                ADD_OP_CODE,
+                SUB_OP_CODE,
+                MUL_OP_CODE: begin
+                    state_reg_next = DECODE_Y_MAR_IN;
+                end
+                DIV_OP_CODE: begin
+                    // ERROR
+                    state_reg_next = RESET;
+                end
+                STOP_OP_CODE: begin
+                    state_reg_next = DECODE_Y_MAR_IN;
+                end
+                IN_OP_CODE,
+                OUT_OP_CODE: begin
+                    state_reg_next = EXECUTE_STATE_1;
+                end
+            endcase;
+        end
+        
+        DECODE_Y_MAR_IN: begin
+            // put addr of first operand (addr_y) in mar
+            mar_ld = 1'b1;
+            mar_in = {{3{1'b0}}, addr_y}; 
+
+            state_next = DECODE_Y_MEM_READ;
+        end
+
+        DECODE_Y_MEM_READ: begin
+            // we_reg_next = 1'b0; // todo ?
+
+            state_next = DECODE_Y_MDR_IN;
+        end
+
+        DECODE_Y_MDR_IN: begin
+            // no need: mdr_in = mem
+            mdr_ld = 1'b1;
+
+            if(di_y == INDIRECT_ADDRESSING)
+                state_next = DECODE_Y_INDIRECT_MAR_IN;
+            else
+                state_next = DECODE_Y_PUT_IN_IR;
+
+        end
+        DECODE_Y_INDIRECT_MAR_IN: begin
+            mar_in = mdr_out[ADDR_WIDTH-1:0];
+            mar_ld = 1'b1;
+
+            state_next = DECORE_Y_INDIRECT_MEM_READ;
+        end
+
+        DECORE_Y_INDIRECT_MEM_READ: begin
+            // we
+
+        state_next = DECORE_Y_INDIRECT_MDR_IN;
+        end
+
+        DECORE_Y_INDIRECT_MDR_IN: begin
+            // no need for mdr_in = mem;
+            mdr_ld = 1'b1;
+            state_next = DECODE_Y_PUT_IN_IR;
+        end
+
+        DECODE_Y_PUT_IN_IR: begin
+            // todo add register for Y when project is whole
+
+             ir_in = {mdr_out, ir_out[15:0]}; // TODO change this!
+             ir_ld = 1'b1;
+                if(oc == code_in || (oc == code_stop && addr_z == 3'b000)) 
+                    state_reg_next = EXECUTE_STATE_1;
+                else 
+                    state_reg_next = DECODE_Z_MAR_IN;
+        end
+
+        DECODE_Z_MAR_IN: begin
+            // put addr of first operand (addr_z) in mar
+            mar_ld = 1'b1;
+            mar_in = {3{1'b0}, addr_z};
+
+            state_next = DECODE_Z_MEM_READ;
+        end
+
+        DECODE_Z_MEM_READ: begin
+            // we
+
+            state_next = DECODE_Z_MDR_IN;
+        end
+
+        DECODE_Z_MDR_IN: begin
+            // mdr_in = mem;
+            mdr_ld = 1'b1;
+
+            if(di_z == INDIRECT_ADDRESSING)
+                state_next = DECODE_Z_INDIRECT_MAR_IN;
+            else
+                state_next = DECODE_Z_PUT_IN_A;
+        end
+
+        DECODE_Z_INDIRECT_MAR_IN: begin
+            mar_in = mdr_out[ADDR_WIDTH-1:0];
+            mar_ld = 1'b1;
+
+            state_next = DECORE_Z_INDIRECT_MEM_READ;
+        end
+
+        DECORE_Z_INDIRECT_MEM_READ: begin
+            // we
+            state_next = DECORE_Z_INDIRECT_MDR_IN;
+        end
+
+        DECORE_Z_INDIRECT_MDR_IN: begin
+            // mdr_in = mem;
+            mdr_ld = 1'b1;
+
+            state_next = DECODE_Z_PUT_IN_A;
+        end
+
+        DECODE_Z_PUT_IN_A: begin
+            a_in = mdr_out;
+            a_ld = 1'b1;
+            state_reg_next = EXECUTE_STATE_1;
+        end
+
+
 
         default: 
     endcase
 
 end
 
-
-
-// always @(posedge clk, negedge rst_n) begin
-//     if(!rst_n) begin
-//         // todo
-//     end
-//     else begin
-//         // setovanje vrednosti dobijenih sa OUT ?????
-
-//         // obrada STATE-a u kojem smo
-//         case (state_reg)
-//             IR1_FETCH1_START: begin
-//                 // dohvati IR1 iz memorije
-//                     addr = pc;
-//                     we = 1'b0;
-//                     pc = pc + 1'b1;
-//             end
-//             IR1_SET: begin
-//                     // sacekaj da prodje takt -> u mem je memorijska rec
-//                     {oc, di_x, addr1, di_y, addr2, di_z, addr3} = mem;
-
-//                     // da li nam treba druga rec?
-//                     if(OC == nesto) // todo - ovo napraviti da RADI
-//                         state_reg = IR2_READ;
-//                     else
-//                         state_reg = OC; // ???
-//                     pc = pc + 1'b1;
-//             end
-//             IR2_READ: begin
-//                 // dohvati IR2 iz memorije
-//                     addr = pc;
-//                     we = 1'b0;
-//                     pc = pc + 1'b1;
-//             end
-//             IR2_SET: begin
-//                     // sacekaj da prodje takt -> u mem je memorijska rec
-//                     ir2 = mem;
-//                     pc = pc + 1'b1;
-//             end
-
-//             // CPU INSTRUCTIONS
-//             INS_MOV: begin
-                
-
-//             end
-//             INS_ADD: begin
-
-//             end
-
-//             default: 
-//         endcase
-
-//     end
-    
-// end
-
 endmodule
-
-
-
-
 
 
 /// STA RADI CPU

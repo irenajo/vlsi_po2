@@ -1,6 +1,18 @@
 TODO:
 
+zbunjuje me jedna stvar:
+kad dohvatimo IR, uros se ponasa kao da vec imamo X_direct ako vazi di != indirect_Addressing
+    - to bi znacilo da je direktno: da ne odemo u memoriju uopste, nego da uzmemo ona tri bita iz IR
+
+- ali da li to ima smisla? pa, ne. zato sto se za y i z ne ponasamo tako, vec uvek odemo u memoriju da dohvatimo,
+a onda tek proveravamo da li je indirektno ili ne.
+
+
+
+---
 [] add resetting all values to 0 in combinatory logic block
+[t] rename INDIRECT_READ to INDIRECT_ADDRESS
+[] remove ir2 and ir1(if exists)
 [] should localparam[5:0] have width?
 [] assign values to all localparams when you figure out their exact count.
 [] why do we have we_reg_next ??????????
@@ -64,3 +76,9 @@ if mem_indir =>
     - then from MDR immediately put the result into MAR again, and read from memory again, put into MDR
     - then from MDR read and put SOMEWHERE (IR? A? idk)
 
+=============================
+VERIFICATION MY PROJECT WORKS:
+
+
+[] All states have proper transitions.
+[] All opcodes are matched properly.
