@@ -2,8 +2,13 @@ TODO:
 
 [] add resetting all values to 0 in combinatory logic block
 [] should localparam[5:0] have width?
+[] assign values to all localparams when you figure out their exact count.
 
-[] map out reading instruction in diagram
+[] decided to go with DECODE. fetch => DECODE => EXEC.
+[] figure out what is DECODE_STATE_MAR_IN_X , and why do x,y,z all have their stages for indirect
+[] figre out the logic where and how we determine what is indirect and what is not.
+
+[t] map out reading instruction in diagram
 
 [] implement states for reading instruction :)
 

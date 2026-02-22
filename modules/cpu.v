@@ -51,6 +51,13 @@ reg [2:0] alu_oc;
 reg [DATA_WIDTH-1:0] alu_a, alu_b;
 wire [DATA_WIDTH-1:0] alu_f;
 
+// ind_x register.
+reg ind_x_cl, ind_x_ld, ind_x_inc, ind_x_dec, ind_x_sr, ind_x_ir, ind_x_sl, ind_x_il;
+reg [DATA_WIDTH - 1:0] ind_x_in;
+wire [DATA_WIDTH - 1:0] ind_x_out;
+
+
+
 // instantiate registers and alu
 register #(6) PC(.clk(clk), .rst_n(rst_n), .cl(pc_cl), .ld(pc_ld), .in(pc_in), .inc(pc_inc), .dec(pc_dec), .sr(pc_sr), .ir(pc_ir), .sl(pc_sl), .il(pc_il), .out(pc_out));
 register #(6) SP(.clk(clk), .rst_n(rst_n), .cl(sp_cl), .ld(sp_ld), .in(sp_in), .inc(sp_inc), .dec(sp_dec), .sr(sp_sr), .ir(sp_ir), .sl(sp_sl), .il(sp_il), .out(sp_out));
@@ -58,6 +65,19 @@ register #(32) IR(.clk(clk), .rst_n(rst_n), .cl(ir_cl), .ld(ir_ld), .in(ir_in), 
 register #(6) MAR(.clk(clk), .rst_n(rst_n), .cl(mar_cl), .ld(mar_ld), .in(mar_in), .inc(mar_inc), .dec(mar_dec), .sr(mar_sr), .ir(mar_ir), .sl(mar_sl), .il(mar_il), .out(mar_out));
 register #(16) MDR(.clk(clk), .rst_n(rst_n), .cl(mdr_cl), .ld(mdr_ld), .in(mdr_in), .inc(mdr_inc), .dec(mdr_dec), .sr(mdr_sr), .ir(mdr_ir), .sl(mdr_sl), .il(mdr_il), .out(mdr_out));
 register #(16) A(.clk(clk), .rst_n(rst_n), .cl(a_cl), .ld(a_ld), .in(a_in), .inc(a_inc), .dec(a_dec), .sr(a_sr), .ir(a_ir), .sl(a_sl), .il(a_il), .out(a_out));
+    register #(.DATA_WIDTH(DATA_WIDTH)) ind_x_reg (.clk(clk),
+        .rst_n(rst_n),
+        .cl(ind_x_cl),
+        .ld(ind_x_ld),
+        .in(ind_x_in),
+        .inc(ind_x_inc),
+        .dec(ind_x_dec),
+        .sr(ind_x_sr),
+        .ir(ind_x_ir),
+        .sl(ind_x_sl),
+        .il(ind_x_il),
+        .out(ind_x_out)
+    );
 
 alu #(16) ALU(.oc(alu_oc), .a(alu_a), .b(alu_b), .f(alu_f));
 
@@ -107,11 +127,13 @@ localparam IR2_FETCH3_loadIR;
 localparam IR2_FETCH4_parse;
 
 // decode 
-localparam ADDR1_DECODE1;   // todo - this is same logic.. we can maybe reuse these states, just that the stores are different.
-localparam ADDR1_DECODE2;
-localparam ADDR1_DECODE3;
-localparam ADDR1_DECODE4_indirect;
-localparam ADDR1_DECODE5_checkOp;
+localparam DECODE_START; // figure out operation in this stage
+
+localparam ADDR_X_DECODE1;   // todo - this is same logic.. we can maybe reuse these states, just that the stores are different.
+localparam ADDR_X_DECODE2;
+localparam ADDR_X_DECODE3;
+localparam ADDR_X_DECODE4_indirect;
+localparam ADDR_X_DECODE5_checkOp;
 
 
 localparam IR1_SET = 6'd2;
@@ -196,6 +218,9 @@ always @(*) begin
 
             // load (from memory)
             mdr_ld = 1'b1;
+
+            // todo what
+            we_reg_next = 1'b0;
             
             // change state
             case (state_reg)
@@ -226,9 +251,10 @@ always @(*) begin
             {oc, di1, addr1, di2, addr2, di3, addr3} = ir_out[32:16];
 
             // based on OC, decide to either FETCH IR2, or DECODE.
+            // todo
             case (oc)
                 code_ir2_example: state_next = IR2_FETCH1_START;
-                default: state_next = ADDR1_DECODE1;
+                default: state_next = DECODE_START;
             endcase
         end
 
@@ -239,10 +265,34 @@ always @(*) begin
             ir2 = ir_out;
 
             // go on DECODE phase (since max length of instruction is 2 words)
-            state_next = ADDR1_DECODE1;
+            state_next = DECODE_START;
         end
 
-        ADDR1_DECODE1_set: begin
+        DECODE_START: begin
+            case (oc)
+                code_mov, 
+                code_add,
+                code_sub,
+                code_mul: begin
+
+                end
+                code_in: begin
+
+                end
+                code_out: begin
+
+                end
+                code_div: begin
+                    state_next = RESET;
+                end
+                code_stop: begin
+
+                end
+                default: 
+            endcase
+        end
+
+        ADDR_X_DECODE1_set: begin
             // put addr of first operand (addr1) in mar
             mar_ld = 1'b1;
             mar_in = addr1;
@@ -264,14 +314,14 @@ always @(*) begin
             if(di1 == INDIRECT_READ)
                 state_next = ADDR1_DECODE4_indirect_indirect;
             else
-                state_next = ADDR1_DECODE5_checkOp_checkOp;
+                state_next = ADDR1_DECODE5_checkOp;
         end
 
         ADDR1_DECODE4_indirect: begin
             // do indirect...
         end
 
-        ADDR1_DECODE5_checkOp_checkOp: begin
+        ADDR1_DECODE5_checkOp: begin
             case (oc)
                 code_in, code_out: state_next = EXECUTE1;
                 default: state_next = ADDR2_DECODE1; 
