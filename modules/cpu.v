@@ -129,16 +129,29 @@ localparam IR2_FETCH4_parse;
 // decode 
 localparam DECODE_START; // figure out operation in this stage
 
-localparam ADDR_X_DECODE1;   // todo - this is same logic.. we can maybe reuse these states, just that the stores are different.
-localparam ADDR_X_DECODE2;
-localparam ADDR_X_DECODE3;
-localparam ADDR_X_DECODE4_indirect;
-localparam ADDR_X_DECODE5_checkOp;
+localparam DECODE_X_MAR_IN;   // todo - this is same logic.. we can maybe reuse these states, just that the stores are different.
+localparam DECODE_X_MEM_READ;
+localparam DECODE_X_MDR_IN;
+localparam DECODE_X_INDIRECT_MAR_IN; // ???
+localparam DECORE_X_INDIRECT_MEM_READ;
+localparam DECORE_X_INDIRECT_MDR_IN;
+localparam DECODE_X_PUT_IN_X; // ?
 
+localparam DECODE_Y_MAR_IN;
+localparam DECODE_Y_MEM_READ;
+localparam DECODE_Y_MDR_IN;
+localparam DECODE_Y_INDIRECT_MAR_IN;
+localparam DECORE_Y_INDIRECT_MEM_READ;
+localparam DECORE_Y_INDIRECT_MDR_IN;
+localparam DECODE_Y_PUT_IN_IR;
 
-localparam IR1_SET = 6'd2;
-localparam IR2_READ = 6'd3;
-localparam IR2_SET = 6'd4;
+localparam DECODE_Z_MAR_IN;
+localparam DECODE_Z_MEM_READ;
+localparam DECODE_Z_MDR_IN;
+localparam DECODE_Z_INDIRECT_MAR_IN;
+localparam DECORE_Z_INDIRECT_MEM_READ;
+localparam DECORE_Z_INDIRECT_MDR_IN;
+localparam DECODE_Z_PUT_IN_A;
 
 // execute OP
 localparam EXECUTE1;
@@ -150,7 +163,7 @@ localparam INS_ADD;
 // internal CPU params
 reg [3:0] oc;
 reg [2:0] addr1, addr2, addr3;
-reg di1, di2, di3;
+reg di_x, di_y, di_z;
 reg [DATA_WIDTH:0] ir2;
 
 
@@ -233,7 +246,7 @@ always @(*) begin
         IR1_FETCH3_loadIR: begin
             // read from mdr into ir
             ir_ld = 1'b1; // todo remove hardwired numbers 
-            ir_in[32:16] = mdr_out;
+            ir_in[15:0] = mdr_out;
             // change state
             state_next =  IR1_FETCH4_parse;
         end
@@ -241,19 +254,19 @@ always @(*) begin
         IR2_FETCH3_loadIR: begin
             // read from mdr into ir
             ir_ld = 1'b1;
-            ir_in[15:0] = mdr_out;
+            ir_in[31:16] = mdr_out;
             // change state
             state_next =  IR2_FETCH4_parse;
         end
 
         IR1_FETCH4_parse: begin
             // put data in internal cpu registers
-            {oc, di1, addr1, di2, addr2, di3, addr3} = ir_out[32:16];
+            {oc, di_x, addr1, di_y, addr2, di_z, addr3} = ir_out[15:0];
 
             // based on OC, decide to either FETCH IR2, or DECODE.
-            // todo
+            // however it doesnt seem that any of our instructions have 2 words length IR.
             case (oc)
-                code_ir2_example: state_next = IR2_FETCH1_START;
+                code_ir2_example: state_next = IR2_FETCH1_START; // this will do nothing!
                 default: state_next = DECODE_START;
             endcase
         end
@@ -261,7 +274,7 @@ always @(*) begin
         IR2_FETCH4_parse: begin
             // put data in internal ir2 register
             ir_ld = 1'b1;
-            ir_in[15:0] = mdr_out;
+            ir_in[31:16] = mdr_out;
             ir2 = ir_out;
 
             // go on DECODE phase (since max length of instruction is 2 words)
@@ -269,13 +282,14 @@ always @(*) begin
         end
 
         DECODE_START: begin
+            // begin phase
             case (oc)
                 code_mov, 
                 code_add,
                 code_sub,
                 code_mul: begin
-
-                end
+                    state_next = DECODE_X_MAR_IN;
+                end 
                 code_in: begin
 
                 end
@@ -292,42 +306,32 @@ always @(*) begin
             endcase
         end
 
-        ADDR_X_DECODE1_set: begin
+        DECODE_X_MAR_IN: begin
             // put addr of first operand (addr1) in mar
             mar_ld = 1'b1;
             mar_in = addr1;
 
-            state_next = ADDR1_DECODE2;
+            state_next = DECODE_X_MEM_READ;
         end
 
-        ADDR1_DECODE2: begin
+        DECODE_X_MEM_READ: begin
             // read from memory into MDR
             mdr_ld = 1'b1;
 
-            state_next = ADDR1_DECODE3;
+            state_next = DECODE_X_MDR_IN;
         end
 
-        ADDR1_DECODE3: begin
+        DECODE_X_MDR_IN: begin
             // read from MDR into internal register
-            param1 = mdr_out;
+            // todo !!!!
 
-            if(di1 == INDIRECT_READ)
+            if(di_x == INDIRECT_READ)
                 state_next = ADDR1_DECODE4_indirect_indirect;
             else
                 state_next = ADDR1_DECODE5_checkOp;
         end
 
-        ADDR1_DECODE4_indirect: begin
-            // do indirect...
-        end
-
-        ADDR1_DECODE5_checkOp: begin
-            case (oc)
-                code_in, code_out: state_next = EXECUTE1;
-                default: state_next = ADDR2_DECODE1; 
-            endcase
-
-        end
+        
 
         default: 
     endcase
@@ -353,7 +357,7 @@ end
 //             end
 //             IR1_SET: begin
 //                     // sacekaj da prodje takt -> u mem je memorijska rec
-//                     {oc, di1, addr1, di2, addr2, di3, addr3} = mem;
+//                     {oc, di_x, addr1, di_y, addr2, di_z, addr3} = mem;
 
 //                     // da li nam treba druga rec?
 //                     if(OC == nesto) // todo - ovo napraviti da RADI
