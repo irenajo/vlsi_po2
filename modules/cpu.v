@@ -99,7 +99,7 @@ assign data = mdr_out;
 // constants abt addressing
 localparam INDIRECT_ADDRESSING = 1'b1;
 
-// op codes
+// CPU op codes
 localparam code_mov = 4'b0000;
 localparam code_add = 4'b0001;
 localparam code_sub = 4'b0010;
@@ -108,6 +108,16 @@ localparam code_div = 4'b0100;
 localparam code_in = 4'b0111;
 localparam code_out = 4'b1000;
 localparam code_stop = 4'b1111;
+
+// ALU op codes
+localparam alu_code_add = 3'b000;
+localparam alu_code_sub = 3'b001;
+localparam alu_code_mul = 3'b010;
+localparam alu_code_div = 3'b011;
+localparam alu_code_not = 3'b100;
+localparam alu_code_xor = 3'b101;
+localparam alu_code_or = 3'b110;
+localparam alu_code_and  = 3'b111;
 
 // FINITE STATE MACHINE 
 reg [6:0] state_reg, state_next;
@@ -377,18 +387,18 @@ always @(*) begin
                 ADD_OP_CODE,
                 SUB_OP_CODE,
                 MUL_OP_CODE: begin
-                    state_reg_next = DECODE_Y_MAR_IN;
+                    state_next = DECODE_Y_MAR_IN;
                 end
                 DIV_OP_CODE: begin
                     // ERROR
-                    state_reg_next = RESET;
+                    state_next = RESET;
                 end
                 STOP_OP_CODE: begin
-                    state_reg_next = DECODE_Y_MAR_IN;
+                    state_next = DECODE_Y_MAR_IN;
                 end
                 IN_OP_CODE,
                 OUT_OP_CODE: begin
-                    state_reg_next = EXECUTE_STATE_1;
+                    state_next = EXECUTE_STATE_1;
                 end
             endcase;
         end
@@ -442,9 +452,9 @@ always @(*) begin
              ir_in = {mdr_out, ir_out[15:0]}; // TODO change this!
              ir_ld = 1'b1;
                 if(oc == code_in || (oc == code_stop && addr_z == 3'b000)) 
-                    state_reg_next = EXECUTE_STATE_1;
+                    state_next = EXECUTE_STATE_1;
                 else 
-                    state_reg_next = DECODE_Z_MAR_IN;
+                    state_next = DECODE_Z_MAR_IN;
         end
 
         DECODE_Z_MAR_IN: begin
@@ -493,14 +503,149 @@ always @(*) begin
         DECODE_Z_PUT_IN_A: begin
             a_in = mdr_out;
             a_ld = 1'b1;
-            state_reg_next = EXECUTE_STATE_1;
+            state_next = EXECUTE_STATE_1;
         end
 
+        EXECUTE_STATE_1: begin
+            case (oc)
+                code_mov: begin
+                    // MOV X, Y
+                    // Y => X
 
+                    // y
+                    mdr_in = ir_out[(32-1):16]; // todo, change with dedicated register reg_y!
+                    mdr_ld = 1'b1;
+
+                    // x
+                    if(di_x == INDIRECT_ADDRESSING)
+                        mar_in = {{3{1'b0}}, addr_x};
+                    else
+                        mar_in = ind_x_out[ADDR_WIDTH-1:0];
+                    
+                    mar_ld = 1'b1;
+                    state_next = EXECUTE_STATE_2;
+                end
+
+                code_add: begin
+                    // X <= Y + Z
+
+                    // ADD
+                    alu_oc = alu_code_add;
+                    alu_a = ir_out[(IR_WIDTH-1):16]; // todo, change with dedicated Y register
+                    alu_b = a_out; // Z
+
+                    // in same clock, ALU will have calculated, so we can make MDR read in this clock.
+                    mdr_in = alu_f;
+                    mdr_ld = 1'b1;
+
+                    if(oc == INDIRECT_ADDRESSING) 
+                        mar_in = ind_x_out[(ADDR_WIDTH-1):0];
+                    else 
+                        mar_in = {{3{1'b0}}, addr_x};
+                        
+                    mar_ld = 1'b1;
+                    state_next = EXECUTE_STATE_2;
+                end
+
+                code_sub: begin
+                    // X <= Y - Z
+                    
+                    // SUB
+                    alu_oc = alu_code_sub;
+                    alu_a = ir_out[(IR_WIDTH-1):16]; // todo, change with dedicated Y register
+                    alu_b = a_out; // Z
+
+                    // in same clock, ALU will have calculated, so we can make MDR read in this clock.
+                    mdr_in = alu_f;
+                    mdr_ld = 1'b1;
+
+                    if(oc == INDIRECT_ADDRESSING) 
+                        mar_in = ind_x_out[(ADDR_WIDTH-1):0];
+                    else 
+                        mar_in = {{3{1'b0}}, addr_x};
+                        
+                    mar_ld = 1'b1;
+                    state_next = EXECUTE_STATE_2;
+                end
+
+                code_mul: begin
+                    // X <= Y * Z
+                    
+                    // SUB
+                    alu_oc = alu_code_mul;
+                    alu_a = ir_out[(IR_WIDTH-1):16]; // todo, change with dedicated Y register
+                    alu_b = a_out; // Z
+
+                    // in same clock, ALU will have calculated, so we can make MDR read in this clock.
+                    mdr_in = alu_f;
+                    mdr_ld = 1'b1;
+
+                    if(oc == INDIRECT_ADDRESSING) 
+                        mar_in = ind_x_out[(ADDR_WIDTH-1):0];
+                    else 
+                        mar_in = {{3{1'b0}}, addr_x};
+                        
+                    mar_ld = 1'b1;
+                    state_next = EXECUTE_STATE_2;
+                end
+
+                code_in: begin // TODO -> how does IN (reading from stdin) WORK ???
+                    // IN X
+
+                    // status_reg_next = 1'b1; // what ????
+
+
+                end
+
+                code_out: begin
+                    // OUT X
+                    out_next = ind_x_out;
+                    state_next = IR1_FETCH1_START; // OP DONE!
+                end
+
+                code_stop: begin
+                    if(addr_x != 3'b000) begin
+                        // OUT X
+                        out_next = ind_x_out;
+                    end 
+                    state_next = EXECUTE_STATE_2;
+                end
+            endcase
+        end
+
+        EXECUTE_STATE_2: begin
+            case (oc)
+                code_mov,
+                code_add,
+                code_sub,
+                code_mul,
+                code_in: begin
+                    // write into memory
+                    we_reg_next = 1'b1;
+                    state_next = IR1_FETCH1_START;
+                end 
+
+                code_stop: begin
+                    if(addr_y != 3'b000) begin
+                        // OUT Y
+                        out_next = ir_out[(IR_WIDTH-1):16]; // todo, change to dedicated register
+                    end 
+                    reg_next = EXECUTE_STATE_3;
+                end
+            endcase
+        end
+
+        EXECUTE_STATE_3: begin
+            if(addr_z != 3'b000) begin
+                // OUT Z
+                out_next = a_out;
+            end 
+            // spin.
+            state_reg_next = IR1_FETCH1_START;
+        end
 
         default: 
     endcase
-
 end
 
 endmodule

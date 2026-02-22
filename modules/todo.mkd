@@ -6,6 +6,29 @@ kad dohvatimo IR, uros se ponasa kao da vec imamo X_direct ako vazi di != indire
 
 - ali da li to ima smisla? pa, ne. zato sto se za y i z ne ponasamo tako, vec uvek odemo u memoriju da dohvatimo,
 a onda tek proveravamo da li je indirektno ili ne.
+===========
+
+EXECUTE phase:
+
+add, sub, mul: 
+    1. odradi operaciju (bice na izlazu ALU)
+    2. stavi izlaz ALU u MDR, a u MAR stavi x_ind
+    3. mora da prodje takt da se upie u memoriju, stavi WE = 1
+
+mov:
+    1. ako z = 000, u MAR stavi ind_x, u MDR stavi Y
+    2. takt upisa u mem, we = 1
+
+in: ???
+    1. odakle dovlacimo ovaj podatak?? whatttt
+
+out: ???
+    1. dovukli smo u ind_x operand, samo ga saljemo na 7seg displej!
+
+stop:
+    1. ako imamo x, ispisi (dovukli smo ga vec)
+    2. ako imamo y, ispisi (dovukli)
+    3. ako imamo z, ispisi (dovukli)
 
 
 
@@ -82,3 +105,5 @@ VERIFICATION MY PROJECT WORKS:
 
 [] All states have proper transitions.
 [] All opcodes are matched properly.
+[] make sure you properly handle X in INDIRECT checks (Because it might be wrong!)
+
