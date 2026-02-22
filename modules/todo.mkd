@@ -39,6 +39,7 @@ stop:
 [] should localparam[5:0] have width?
 [] assign values to all localparams when you figure out their exact count.
 [] why do we have we_reg_next ??????????
+[] error localparam state? do i need this?
 
 [] decided to go with DECODE. fetch => DECODE => EXEC.
 [] figure out what is DECODE_STATE_MAR_IN_X , and why do x,y,z all have their stages for indirect

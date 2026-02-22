@@ -63,7 +63,9 @@ reg ind_x_cl, ind_x_ld, ind_x_inc, ind_x_dec, ind_x_sr, ind_x_ir, ind_x_sl, ind_
 reg [DATA_WIDTH - 1:0] ind_x_in;
 wire [DATA_WIDTH - 1:0] ind_x_out;
 
-
+// we reg
+reg we_reg, we_reg_next;
+assign we = we_reg;
 
 // instantiate registers and alu
 register #(6) PC(.clk(clk), .rst_n(rst_n), .cl(pc_cl), .ld(pc_ld), .in(pc_in), .inc(pc_inc), .dec(pc_dec), .sr(pc_sr), .ir(pc_ir), .sl(pc_sl), .il(pc_il), .out(pc_out));
@@ -127,7 +129,7 @@ localparam RESET = 0;
 localparam ERROR; // todo
 
 // fetch IR
-localparam IR1_FETCH1_START;
+localparam IR1_FETCH_MAR_IN;
 localparam IR1_FETCH2_WAIT;
 localparam IR1_FETCH_loadMDR;
 localparam IR1_FETCH3_loadIR;
@@ -176,10 +178,14 @@ always @(posedge clk, negedge rst_n) begin
     if(!rst_n) begin
         out_reg <= {DATA_WIDTH{1'b0}};
         state_reg <= 6'd0;
+        we_reg <= 1'b0;
+        // status_reg <= 1'b0; // todo?
     end
     else begin
         out_reg <= out_next;
         state_reg <= state_next;
+        we_reg <= we_reg_next;
+        // status_reg <= status_reg_next; // todo?
     end
 end
 
@@ -202,7 +208,7 @@ always @(*) begin
     alu_oc = 3'b000; alu_a = {DATA_WIDTH{1'b0}}; alu_b = {DATA_WIDTH{1'b0}}; 
     state_next = state_reg;
     out_next = out_reg;
-    we_reg_next = 1'b0; // todo do we need this?
+    we_reg_next = 1'b0;
 
     // do current state
     case (state_reg)
@@ -211,17 +217,17 @@ always @(*) begin
             pc_in = 6'd8;
             sp_ld = 1'b1;
             sp_in = {6{1'b1}};
-            state_next = IR1_FETCH1_START;
+            state_next = IR1_FETCH_MAR_IN;
         end
 
-        IR1_FETCH1_START, IR2_FETCH1_START: begin
+        IR1_FETCH_MAR_IN, IR2_FETCH1_START: begin
             // put in MAR
             mar_ld = 1'b1;
             mar_in = pc;
 
             // change state
             case (state_reg)
-                IR1_FETCH1_START : state_next =  IR1_FETCH2_WAIT;
+                IR1_FETCH_MAR_IN : state_next =  IR1_FETCH2_WAIT;
                 IR2_FETCH1_START : state_next =  IR2_FETCH2_WAIT;
                 default: state_next = ERROR;
             endcase
@@ -230,9 +236,7 @@ always @(*) begin
         IR1_FETCH2_WAIT, IR2_FETCH2_WAIT: begin
             // increment PC
             pc_inc = 1'b1;
-
-            // todo what
-            // we_reg_next = 1'b0;
+            we_reg_next = 1'b0;
             
             // change state
             case (state_reg)
@@ -333,8 +337,7 @@ always @(*) begin
         end
 
         DECODE_X_MEM_READ: begin
-            // we_reg_next = 1'b0; // todo ?
-
+            we_reg_next = 1'b0;
             state_next = DECODE_X_MDR_IN;
         end
 
@@ -366,8 +369,7 @@ always @(*) begin
         end
 
         DECODE_X_INDIRECT_MEM_READ: begin
-            // we = 1'b0;
-            
+            we_reg_next = 1'b0;
             state_next = DECODE_X_INDIRECT_MDR_IN;
         end
         
@@ -412,8 +414,7 @@ always @(*) begin
         end
 
         DECODE_Y_MEM_READ: begin
-            // we_reg_next = 1'b0; // todo ?
-
+            we_reg_next = 1'b0;
             state_next = DECODE_Y_MDR_IN;
         end
 
@@ -435,8 +436,7 @@ always @(*) begin
         end
 
         DECORE_Y_INDIRECT_MEM_READ: begin
-            // we
-
+        we_reg_next = 1'b0;
         state_next = DECORE_Y_INDIRECT_MDR_IN;
         end
 
@@ -466,8 +466,7 @@ always @(*) begin
         end
 
         DECODE_Z_MEM_READ: begin
-            // we
-
+            we_reg_next = 1'b0;
             state_next = DECODE_Z_MDR_IN;
         end
 
@@ -494,7 +493,7 @@ always @(*) begin
         end
 
         DECORE_Z_INDIRECT_MDR_IN: begin
-            // mdr_in = mem;
+            we_reg_next = 1'b0;
             mdr_ld = 1'b1;
 
             state_next = DECODE_Z_PUT_IN_A;
@@ -600,7 +599,7 @@ always @(*) begin
                 code_out: begin
                     // OUT X
                     out_next = ind_x_out;
-                    state_next = IR1_FETCH1_START; // OP DONE!
+                    state_next = IR1_FETCH_MAR_IN; // OP DONE!
                 end
 
                 code_stop: begin
@@ -622,7 +621,7 @@ always @(*) begin
                 code_in: begin
                     // write into memory
                     we_reg_next = 1'b1;
-                    state_next = IR1_FETCH1_START;
+                    state_next = IR1_FETCH_MAR_IN;
                 end 
 
                 code_stop: begin
@@ -641,7 +640,7 @@ always @(*) begin
                 out_next = a_out;
             end 
             // spin.
-            state_reg_next = IR1_FETCH1_START;
+            state_reg_next = IR1_FETCH_MAR_IN;
         end
 
         default: 
