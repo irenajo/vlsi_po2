@@ -119,11 +119,13 @@ localparam ERROR; // todo
 // fetch IR
 localparam IR1_FETCH1_START;
 localparam IR1_FETCH2_WAIT;
+localparam IR1_FETCH_loadMDR;
 localparam IR1_FETCH3_loadIR;
 localparam IR1_FETCH4_parse;
 
 localparam IR2_FETCH1_START;
 localparam IR2_FETCH2_WAIT;
+localparam IR2_FETCH_loadMDR;
 localparam IR2_FETCH3_loadIR;
 localparam IR2_FETCH4_parse;
 
@@ -219,16 +221,26 @@ always @(*) begin
             // increment PC
             pc_inc = 1'b1;
 
-            // load (from memory)
-            mdr_ld = 1'b1;
-
             // todo what
             we_reg_next = 1'b0;
             
             // change state
             case (state_reg)
-                IR1_FETCH2_WAIT : state_next =  IR1_FETCH3_loadIR;
-                IR2_FETCH2_WAIT : state_next =  IR2_FETCH3_loadIR;
+                IR1_FETCH2_WAIT : state_next =  IR1_FETCH_loadMDR;
+                IR2_FETCH2_WAIT : state_next =  IR2_FETCH_loadMDR;
+                default: state_next = ERROR;
+            endcase
+        end
+
+        IR1_FETCH_loadMDR, IR2_FETCH_loadMDR: begin
+            // load (from memory)
+            mdr_ld = 1'b1;
+            // (mdr_in = mem_out) by default
+
+            // change state
+            case (state_reg)
+                IR1_FETCH_loadMDR : state_next =  IR1_FETCH3_loadIR;
+                IR2_FETCH_loadMDR : state_next =  IR2_FETCH3_loadIR;
                 default: state_next = ERROR;
             endcase
         end
@@ -313,6 +325,9 @@ always @(*) begin
         DECODE_X_MEM_READ: begin
             // read from memory into MDR
             mdr_ld = 1'b1;
+
+            // ?
+            we_reg_next = 1'b0;
 
             state_next = DECODE_X_MDR_IN;
         end
