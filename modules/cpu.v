@@ -15,6 +15,13 @@ input[DATA_HIGH:0] mem, in;
 output[DATA_HIGH:0] data, out;
 output[ADDR_HIGH:0] addr, pc, sp;
 
+// internal CPU params
+reg [3:0] oc;
+reg [2:0] addr1, addr2, addr3;
+reg di_x, di_y, di_z;
+reg [DATA_WIDTH:0] ir2;
+
+
 // instantiating variables for registers
 // PC    
 reg pc_cl, pc_ld, pc_inc, pc_dec, pc_sr, pc_ir, pc_sl, pc_il;
@@ -103,13 +110,7 @@ localparam code_ir2_example = 4'b1010; // does not exist, used for testing 2-ins
 
 
 // FINITE STATE MACHINE 
-reg [6:0] state_reg, state_next; // ???
-
-
-// FETCH, DECODE, EXECUTE, MEM_ACC??, WRITE_bACK???
-
-// state IR
-// todo : enumerate
+reg [6:0] state_reg, state_next;
 
 // reset, end, error
 localparam RESET = 0;
@@ -154,28 +155,9 @@ localparam DECORE_Z_INDIRECT_MDR_IN;
 localparam DECODE_Z_PUT_IN_A;
 
 // execute OP
-localparam EXECUTE1;
-
-localparam INS_MOV;
-localparam INS_ADD;
-
-
-// internal CPU params
-reg [3:0] oc;
-reg [2:0] addr1, addr2, addr3;
-reg di_x, di_y, di_z;
-reg [DATA_WIDTH:0] ir2;
-
-
-// wire [2:0] addr_op1_reg, addr_op1_next, addr_op2_reg, addr_op2_next, addr_op3_reg, addr_op3_next;
-
-// assign oc = ir_out[31:28];
-// assign addr1 = ir_out[26:24];
-// assign addr2 = ir_out[22:20];
-// assign addr3 = ir_out[18:16];
-// assign i_d1 = ir_out[27];
-// assign i_d2 = ir_out[23];
-// assign i_d3 = ir_out[19];
+localparam EXECUTE_1;
+localparam EXECUTE_2;
+localparam EXECUTE_3;
 
 /// on clock we update state and output of component
 always @(posedge clk, negedge rst_n) begin
@@ -196,11 +178,19 @@ always @(*) begin
     // set previous values
     out_next = out_reg;
     state_next = state_reg;
-    // addr_op1_next = addr_op1_reg;
-    // addr_op2_next = addr_op2_reg;
-    // addr_op3_next = addr_op3_reg;
 
     // todo: reset values of each input of all registers (IR, MAR, MDR, etc...)
+    pc_in = pc; pc_cl = 1'b0; pc_ld = 1'b0; pc_inc = 1'b0; pc_dec = 1'b0; pc_sr = 1'b0; pc_ir = 1'b0; pc_sl = 1'b0; pc_il = 1'b0;
+    sp_in = sp; sp_cl = 1'b0; sp_ld = 1'b0; sp_inc = 1'b0; sp_dec = 1'b0; sp_sr = 1'b0; sp_ir = 1'b0; sp_sl = 1'b0; sp_il = 1'b0;
+    ir_in = ir_out; ir_cl = 1'b0; ir_ld = 1'b0; ir_inc = 1'b0; ir_dec = 1'b0; ir_sr = 1'b0; ir_ir = 1'b0; ir_sl = 1'b0; ir_il = 1'b0;
+    mar_in = mar_out; mar_cl = 1'b0; mar_ld = 1'b0; mar_inc = 1'b0; mar_dec = 1'b0; mar_sr = 1'b0; mar_ir = 1'b0; mar_sl = 1'b0; mar_il = 1'b0;
+    mdr_in = mem; mdr_cl = 1'b0; mdr_ld = 1'b0; mdr_inc = 1'b0; mdr_dec = 1'b0; mdr_sr = 1'b0; mdr_ir = 1'b0; mdr_sl = 1'b0; mdr_il = 1'b0;
+    a_in = a_out; a_cl = 1'b0; a_ld = 1'b0; a_inc = 1'b0; a_dec = 1'b0; a_sr = 1'b0; a_ir = 1'b0; a_sl = 1'b0; a_il = 1'b0;
+    ind_x_in = ind_x_out; ind_x_cl = 1'b0; ind_x_ld = 1'b0; ind_x_inc = 1'b0; ind_x_dec = 1'b0; ind_x_sr = 1'b0; ind_x_ir = 1'b0; ind_x_sl = 1'b0; ind_x_il = 1'b0;
+    alu_oc = 3'b000; alu_a = {DATA_WIDTH{1'b0}}; alu_b = {DATA_WIDTH{1'b0}}; 
+    state_next = state_reg;
+    out_next = out_reg;
+    we_reg_next = 1'b0; // todo do we need this?
 
     // do current state
     case (state_reg)
@@ -288,20 +278,26 @@ always @(*) begin
                 code_add,
                 code_sub,
                 code_mul: begin
-                    state_next = DECODE_X_MAR_IN;
-                end 
+                        if(di_x == 1'b1) 
+                            state_next = DECODE_X_INDIRECT_MAR_IN;
+                        else 
+                            state_next = DECODE_Y_MAR_IN;
+                    end
                 code_in: begin
-
-                end
+                        if(di_x == 1'b1) 
+                            state_next = DECODE_X_INDIRECT_MAR_IN;
+                        else
+                            state_next = EXECUTE_STATE_1;
+                    end
                 code_out: begin
-
-                end
+                        state_next = DECODE_X_MAR_IN;
+                    end
                 code_div: begin
                     state_next = RESET;
                 end
                 code_stop: begin
-
-                end
+                        state_next = DECODE_X_MAR_IN;
+                    end
                 default: 
             endcase
         end
